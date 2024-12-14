@@ -1,0 +1,317 @@
+% --- Main Program Start ---
+
+% Ask the user for the pollutant type
+disp('Select the pollutant type:');
+disp('1. CO2');
+disp('2. CO');
+disp('3. NO2');
+disp('4. SO2');
+pollutant_choice = input('Enter the number corresponding to the pollutant: ');
+
+while pollutant_choice ~= 1 && pollutant_choice ~= 2 && pollutant_choice ~= 3 && pollutant_choice ~= 4 
+    pollutant_choice = input('Invalid input. Please enter a number between 1 and 5: ');
+end
+
+% Set the reaction constant (k) based on the chosen pollutant
+switch pollutant_choice
+    case 1
+        pollutant_name = 'CO2';
+        permissible_limits = .005; % For one day (gm / m^3) (World Health Organization)
+    case 2
+        pollutant_name = 'CO';
+        permissible_limits = .007; % For one day (gm / m^3) (World Health Organization)
+    case 3
+        pollutant_name = 'NO2';
+        permissible_limits = .000025; % For one day (gm / m^3) (World Health Organization)
+    case 4
+        pollutant_name = 'SO2';
+        permissible_limits = .00002; % For one day (gm / m^3) (World Health Organization)
+end
+
+
+disp(['You selected ' pollutant_name]);
+
+% Define a range of x and y coordinates
+x_range = -2000:70:2000;  % from -2000 to 2000 meters with a step of 50 meters
+y_range = -2000:70:2000; 
+[X, Y] = meshgrid(x_range, y_range);  % Create a grid of x and y points
+
+% Set other parameters
+STABILITY = 1;        % Stability category
+
+
+% Set the number of stacks
+num_of_stacks = input('How many stacks do you have? : ');
+while num_of_stacks <=0
+    num_of_stacks = input('-- Please enter a valid number of smockstacks : ');
+end
+
+H=ones(num_of_stacks,1);
+r=ones(num_of_stacks,1);
+Ts=ones(num_of_stacks,1);
+Vs=ones(num_of_stacks,1);
+Q=ones(num_of_stacks,1);
+F=ones(num_of_stacks,1);
+
+
+for i=1:num_of_stacks
+    H(i)=input('Enter the smokestack' + string(i) + ' height (m): '); % Stack height in meters
+    while H(i) <= 0
+        H(i)=input('Enter the smokestack;' + string(i) + ' height (m): ');
+    end
+    r(i) = input('Enter the smokestack' + string(i) + ' radius (m): '); % Smokestack radius (m)
+    while r(i) > H(i)
+    r(i) = input('Please enter a valid smokestack' + string(i) + ' radius (m) [Must be less than H%d]: ');
+    end
+    
+    Ts(i)= input('Enter the smokestack' + string(i) + ' temperature (K): '); % Stack gas temperature (K)
+    while Ts(i) <= 0
+        Ts(i) = input('Please enter a valid smokestack' + string(i) + ' temperature (K) [Must be greater than 0]: ');
+    end
+    Vs(i) =input('Enter the smokestack' + string(i) + ' gas velocity (m/sec): '); % Stack gas velocity (m/s)
+    while Vs(i) <= 0
+        Vs(i) = input('Please enter a valid smokestack' + string(i) + ' gas velocity (m/sec) [Must be greater than 0]: ');
+    end
+    Q(i) = input('Enter the smokestack' + string(i) + ' emission rate (gm/sec):'); % Emission rate in grams per second
+    while Q(i) <= 0
+    Q(i) = input('Please enter a valid smokestack' + string(i) + ' emission rate (gm/sec) [Must be greater than 0]: ');
+    end    
+end
+
+u = input('Enter the Wind speed (m/sec): '); % Wind speed in meters per second
+while u <= 0
+    u = input('Please enter a valid Wind speed (m/sec) [Must be greater than 0]: ');
+end
+dir = input('Enter the Wind direction (degrees): ');  % Wind direction (degrees)
+
+Ta = input('Enter the ambient temperature (K): '); % Ambient temperature (K)
+while Ta <= 0
+    Ta = input('Please enter a valid ambient temperature (K) [Must be greater than 0]: ');
+end
+
+% Estimation of Buoyancy Flux Parameter
+for i=1:num_of_stacks
+    F(i) = 9.81 * (r(i))^2 * Vs(i) * (1 - Ta / (Ts(i)));
+end
+% Input terrain case
+disp('Input terrain case');
+disp('TC = 1 means Rough Terrain ; TC = 2 means Smooth Terrain');
+TC = input('Enter TC as a number ( 1 or 2 ): ');
+while TC ~= 1 && TC ~= 2
+    TC = input('Please enter a valid TC ( 1 or 2 ): ');
+end
+% Set terrain response
+if TC == 1
+    RC = input('Enter RC as a number ( 1 , 2 or 3 ): ');
+    while RC ~= 1 && RC ~= 2 && RC ~= 3
+        RC = input('Please enter a valid RC ( 1 , 2 or 3 ): ');
+    end
+    if RC == 1
+        p = 0.15;
+    elseif RC == 2
+        p = 0.25;
+    else
+        p = 0.6;
+    end
+elseif TC == 2
+    RC = input('Enter RC as a number( 1 , 2 or 3 ): ');
+    if RC == 1
+        p = 0.09;
+    elseif RC == 2
+        p = 0.15;
+    else
+        p = 0.24;
+    end    
+end
+
+% Estimation of Plume Rise
+if RC == 1 || RC == 2
+    if F >= 55
+        xf = 120 * F^0.4;
+    else
+        xf = 50 * F^(5/8);
+    end
+    dh = 1.6 * F^(1/3) * xf^(2/3) / u;
+else
+    dTadz = 0.02; % Temperature gradient
+    gamma = 0.05; % Atmospheric stability parameter
+    S = 9.81 / Ta * (dTadz + gamma);
+    dh = 2.4 * (F / u / S)^(1/3);
+end
+
+H = H + dh;  % Update the stack height
+
+z = input('Enter the Height where concentration is calculated (m): '); % Height where concentration is calculated (m)
+while z < 0
+    z = input('Please enter a valid Height where concentration is calculated (m) [Must be greater than or equal to 0]: ');
+end
+
+Xs=ones(num_of_stacks,1);
+Ys=ones(num_of_stacks,1);
+% Smokestack 1 - Source 1 (First smokestack location)
+xs(1) = 0;            % x-coordinate of the first smokestack
+ys(1) = 0;            % y-coordinate of the first smokestack
+
+
+for i=2:num_of_stacks
+    Xs(i)=input('Enter the distance between smokstacks(1,'+string(i)+') along X-axis: ');
+    Ys(i)=input('Enter the distance between smokstacks(1,'+string(i)+') along Y-axis: ');
+end
+
+% Call the function for both smokestacks
+Z = ones(size(X)) * z;  % Create a z matrix the same size as X and Y
+C=0;
+
+for i=1:num_of_stacks
+    C = C + simgauss_func(Q(i), u, dir, X, Y, Z, Xs(i), Ys(i), H(i), 0, 0, STABILITY);  % Concentration from smokestacks
+end
+
+
+disp('Which mode do you need?');
+disp('1. All the plots displayed on a single figure.');
+disp('2. Each plot is shown in a separate figure.');
+plotting_mode = input('Enter the plotting mode: ');
+while plotting_mode ~= 1 && plotting_mode ~= 2 
+    plotting_mode = input('Invalid input. Please enter a valid number 1 or 2: ');
+end
+
+% All the plots displayed on a single figure
+if plotting_mode == 1
+
+% Create the figure for all subplots
+figure;
+
+% 1. Concentration Contour Plot
+subplot(2, 3, 1);  % Position in the 2x3 grid, first plot
+contourf(X, Y, C, 20);          % Create a filled contour plot
+caxis([0 1e-4]);                % Set the color axis limits
+xlabel('x (meters)');           
+ylabel('y (meters)');
+title(['Pollutant Concentration Contour ', pollutant_name]);
+colorbar; % Add a color bar for concentration values
+
+% 2. Concentration Surface Plot
+subplot(2, 3, 2);  % Position in the 2x3 grid, second plot
+shading interp;
+surf(X, Y, C);
+xlabel('x (meters)');
+ylabel('y (meters)');
+zlabel('Concentration');
+title(['3D Surface Plot of Pollutant Concentration ', pollutant_name]);
+colorbar; % Add a color bar for concentration values
+
+% 3. Concentration Mesh Plot
+subplot(2, 3, 3);  % Position in the 2x3 grid, third plot
+shading interp;
+mesh(X, Y, C);
+xlabel('x (meters)');
+ylabel('y (meters)');
+zlabel('Concentration');
+title(['3D Mesh Plot of Pollutant Concentration ', pollutant_name]);
+colorbar; % Add a color bar for concentration values
+
+% 4. 3D Contour Plot of Concentration
+subplot(2, 3, 4);  % Position in the 2x3 grid, fourth plot
+shading interp;
+contour3(X, Y, C, 20);
+xlabel('x (meters)');
+ylabel('y (meters)');
+zlabel('Concentration');
+title(['3D Contour Plot of Pollutant Concentration ', pollutant_name]);
+colorbar; % Add a color bar for concentration values
+
+% 5. 3D Bar Plot of Concentration
+subplot(2, 3, 5);  % Position in the 2x3 grid, fifth plot
+shading interp;
+bar3(C);
+xlabel('x (meters)');
+ylabel('y (meters)');
+zlabel('Concentration');
+title(['3D Bar Plot of Pollutant Concentration ', pollutant_name]);
+colorbar; % Add a color bar for concentration values
+
+% 6. Additional plot or a placeholder
+subplot(2, 3, 6);  % Position in the 2x3 grid, sixth plot
+shading interp;
+plot(X(1, :), C(1, :));  % Just a placeholder plot (can be replaced with anything)
+xlabel('x (meters)');
+ylabel('Concentration');
+title(['Placeholder Plot', pollutant_name]);
+
+end
+
+% Each plot is shown in a separate figure
+if plotting_mode == 2
+    
+
+% 1. Concentration Contour Plot
+figure;
+contourf(X, Y, C, 20);          % Create a filled contour plot
+caxis([0 1e-4]);                % Set the color axis limits
+xlabel('x (meters)');           
+ylabel('y (meters)');
+title(['Pollutant Concentration Contour ', pollutant_name]);
+colorbar; % Add a color bar for concentration values
+
+% 2. Concentration Surface Plot
+figure;
+shading interp;
+surf(X, Y, C);
+xlabel('x (meters)');
+ylabel('y (meters)');
+zlabel('Concentration');
+title(['3D Surface Plot of Pollutant Concentration ', pollutant_name]);
+colorbar; % Add a color bar for concentration values
+
+% 3. Concentration Mesh Plot
+figure;
+shading interp;
+mesh(X, Y, C);
+xlabel('x (meters)');
+ylabel('y (meters)');
+zlabel('Concentration');
+title(['3D Mesh Plot of Pollutant Concentration ', pollutant_name]);
+colorbar; % Add a color bar for concentration values
+
+% 4. 3D Contour Plot of Concentration
+figure;
+shading interp;
+contour3(X, Y, C, 20);
+xlabel('x (meters)');
+ylabel('y (meters)');
+zlabel('Concentration');
+title(['3D Contour Plot of Pollutant Concentration ', pollutant_name]);
+colorbar; % Add a color bar for concentration values
+
+% 5. 3D Bar Plot of Concentration
+figure;
+shading interp;
+bar3(C);
+xlabel('x (meters)');
+ylabel('y (meters)');
+zlabel('Concentration');
+title(['3D Bar Plot of Pollutant Concentration ', pollutant_name]);
+colorbar; % Add a color bar for concentration values
+
+% 6. Additional plot or a placeholder
+figure;
+shading interp;
+plot(X(1, :), C(1, :));  % Just a placeholder plot (can be replaced with anything)
+xlabel('x (meters)');
+ylabel('Concentration');
+title(['Placeholder Plot', pollutant_name]);
+
+end
+% Safe Area Calculatuion
+safe_concentration_per_sec = permissible_limits/(24*60*60) ;
+safe_zone = C < safe_concentration_per_sec;
+
+figure;
+contourf(X, Y, C, 20); 
+caxis([0 1e-4]); 
+colorbar;
+hold on;
+contour(X, Y, safe_zone, [1 1], 'LineColor', 'r', 'LineWidth', 2);
+xlabel('X (m)');
+ylabel('Y (m)');
+title('Safe Zone For ',pollutant_name);
