@@ -1,0 +1,46 @@
+function C = simgauss_func(Q,u, dir1, x, y, z, xs, ys, H, Dy, Dz, STABILITY)
+    % Shift coordinates to the center of the stack
+    x1 = x - xs;
+    y1 = y - ys;
+
+    % Components of wind speed (u) in the x and y directions
+    wx = u .* sin((dir1 - 180) .* pi / 180);  % Convert degrees to radians
+    wy = u .* cos((dir1 - 180) .* pi / 180);
+
+    % Calculate scalar product for angle calculation
+    dot_product = wx .* x1 + wy .* y1;
+
+    % Calculate the magnitudes to avoid division errors
+    magnitudes = sqrt(wx.^2 + wy.^2) .* sqrt(x1.^2 + y1.^2);
+
+    % Avoid invalid input in cosine inverse by clamping values between -1 and 1
+    ratio = dot_product ./ magnitudes;
+    ratio = max(min(ratio, 1), -1);  % Clamp to [-1, 1]
+
+    % Angle between wind direction and point (x, y)
+    subtended = acos(ratio);
+
+    % Distance from the smokestack to the point (x, y)
+    hypotenuse = sqrt(x1.^2 + y1.^2);
+
+    % Downwind and crosswind distances
+    downwind = cos(subtended) .* hypotenuse;
+    crosswind = sin(subtended) .* hypotenuse;
+
+    % Consider only points downwind
+
+    ind = find(downwind > 0);
+    C = zeros(size(downwind));
+
+    % Calculate dispersion coefficients (sigmas) based on stability and distance downwind
+    [sig_y, sig_z] = calc_sigmas(STABILITY, downwind);
+
+    % Ensure sigmas are non-zero to avoid division by zero
+    sig_y(sig_y == 0) = eps;  % Smallest positive value in MATLAB
+    sig_z(sig_z == 0) = eps;
+
+    % Gaussian plume concentration calculation
+    C(ind) = Q ./ (2 .* pi .* u .* sig_y(ind) .* sig_z(ind)) ...
+        .* exp(-crosswind(ind).^2 ./ (2 .* sig_y(ind).^2)) ...   .
+        .* (exp(-(z(ind) - H).^2 ./ (2 .* sig_z(ind).^2)) ...
+        + exp(-(z(ind) + H).^2 ./ (2 .* sig_z(ind).^2)));
